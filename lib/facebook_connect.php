@@ -91,7 +91,6 @@ function facebook_connect_login() {
 	if(elgg_is_logged_in()) {
 		forward();
 	}
-	$facebook = facebookservice_api();
 	$fbData = facebook_connect_get_fbdata();
 	if(isset($_GET['error'])) {
 		forward();
@@ -101,6 +100,7 @@ function facebook_connect_login() {
 		forward();
 	} else {
 		$options = array(
+			'plugin_id' => 'facebook_connect',
 			'type' => 'user',
 			'plugin_user_setting_name_value_pairs' => array(
 				'uid' => $fbData['user_profile']['id'],
@@ -115,7 +115,7 @@ function facebook_connect_login() {
 				try {
 					login($users[0]);
 					system_message(elgg_echo('facebook_connect:login:success'));
-					elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken'], $users[0]->guid);
+					elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken'], $users[0]->guid, 'facebook_connect');
 					if(empty($users[0]->email)) {
 						$user = get_entity($users[0]->guid);
 						$user->email = $fbData['user_profile']['email'];
@@ -155,7 +155,6 @@ function facebook_connect_login() {
  */
 function facebook_connect_add_account() {
 	elgg_load_library('facebook');
-	$facebook = facebookservice_api();
 	$fbData = facebook_connect_get_fbdata();
 	if(isset($_GET['error'])) {
 		forward();
@@ -165,6 +164,7 @@ function facebook_connect_add_account() {
 		forward();
 	} else {
 		$options = array(
+			'plugin_id' => 'facebook_connect',
 			'type' => 'user',
 			'plugin_user_setting_name_value_pairs' => array(
 				'uid' => $fbData['user_profile']['id'],
@@ -175,8 +175,8 @@ function facebook_connect_add_account() {
 		);
 		$users = elgg_get_entities_from_plugin_user_settings($options);
 		if (!$users) {
-			elgg_set_plugin_user_setting('uid', $fbData['user_profile']['id']);
-			elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken']);
+			elgg_set_plugin_user_setting('uid', $fbData['user_profile']['id'],'facebook_connect');
+			elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken'],'facebook_connect');
 			system_message(elgg_echo('facebook_connect:authorize:success'));
 		}
 		$user = get_loggedin_user ();
@@ -197,6 +197,7 @@ function facebook_connect_create_update_user($fbData) {
 	// backward compatibility for stalled-development FBConnect plugin
 	$user = FALSE;
 	$facebook_users = elgg_get_entities_from_metadata(array(
+							'plugin_id' => 'facebook_connect',
 							'type' => 'user',
 							'metadata_name_value_pairs' => array(
 								'name' => 'facebook_uid',
@@ -211,16 +212,17 @@ function facebook_connect_create_update_user($fbData) {
 		remove_metadata($user->getGUID(), 'facebook_uid');
 		remove_metadata($user->getGUID(), 'facebook_controlled_profile');
 	}
-	// create new user
+	// check if no user connected to the facebook account
 	if (!$user) {
-		// check new registration allowed
-		if (!facebook_connect_allow_new_users_with_facebook()) {
-			register_error(elgg_echo('registerdisabled'));
-			forward();
-		}
 		$email= $fbData['user_profile']['email'];
-		$users= get_user_by_email($email);
+		$users= get_user_by_email($email); 
 		if(!$users) {
+			// create new user
+			// check new registration allowed
+			if (!facebook_connect_allow_new_users_with_facebook()) {
+				register_error(elgg_echo('registerdisabled'));
+				forward();
+			}
 			// Elgg-ify facebook credentials
 			if(!empty($fbData['user_profile']['username'])) {
 				$username = $fbData['user_profile']['username'];
@@ -261,8 +263,8 @@ function facebook_connect_create_update_user($fbData) {
 		}
 	}
 	// set facebook services tokens
-	elgg_set_plugin_user_setting('uid', $fbData['user_profile']['id'], $user->guid);
-	elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken'], $user->guid);
+	elgg_set_plugin_user_setting('uid', $fbData['user_profile']['id'], $user->guid,'facebook_connect');
+	elgg_set_plugin_user_setting('access_token', $fbData['user_profile']['accessToken'], $user->guid,'facebook_connect');
 	return $user;
 }
 /**
@@ -364,8 +366,8 @@ function facebookservice_api() {
  */
 function facebook_connect_revoke() {
 	// unregister user's access tokens
-	elgg_unset_plugin_user_setting('uid');
-	elgg_unset_plugin_user_setting('access_token');
+	elgg_unset_plugin_user_setting('uid', 'facebook_connect');
+	elgg_unset_plugin_user_setting('access_token', 'facebook_connect');
 	$user = get_loggedin_user ();
 	system_message(elgg_echo('facebook_connect:revoke:success'));
 	forward('settings/plugins/'.$user->username.'/facebook_connect', 'facebook_connect');
